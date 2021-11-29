@@ -31,9 +31,15 @@ void Devices::startSearch(HWND hWnd)
     HANDLE m_radio = NULL;
     HBLUETOOTH_RADIO_FIND m_bt = NULL;
     HBLUETOOTH_DEVICE_FIND m_bt_dev = NULL;
-
+    m_bt = BluetoothFindFirstRadio(&m_bt_find_radio, &m_radio);
     m_search_params.hRadio = m_radio;
-
+    m_search_params.dwSize = sizeof(BLUETOOTH_DEVICE_SEARCH_PARAMS);
+    m_search_params.fReturnAuthenticated = false;
+    m_search_params.fReturnRemembered = true;
+    m_search_params.fReturnUnknown = true;
+    m_search_params.fReturnConnected = false;
+    m_search_params.fIssueInquiry = true;
+    m_search_params.cTimeoutMultiplier = 1;
     ::ZeroMemory(&m_device_info, sizeof(BLUETOOTH_DEVICE_INFO));
     m_device_info.dwSize = sizeof(BLUETOOTH_DEVICE_INFO);
 
@@ -46,11 +52,17 @@ void Devices::startSearch(HWND hWnd)
         buttons[m_device_id] = CreateWindow(L"BUTTON", m_device_info.szName, WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, 10, 30 + ((m_device_id + 1) * 30), 200, 30, hWnd, (HMENU)m_device_id, (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE), NULL);
         m_device_info_arr[m_device_id] = m_device_info;
     }
-
+    isall = true;
     BluetoothFindDeviceClose(m_bt_dev);
 }
 
-ULONGLONG Devices::getDeviceMac(int number)
+
+boolean Devices::isAll()
 {
-    return m_device_info_arr[number].Address.ullLong;
+    return isall;
+}
+
+BLUETOOTH_DEVICE_INFO Devices::getBluetoothDeviceInfo(int number)
+{
+    return m_device_info_arr[number];
 }

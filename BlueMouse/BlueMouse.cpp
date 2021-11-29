@@ -19,11 +19,13 @@
 Devices devices;
 Client client;
 SOCKET sock;
+boolean isRecieve = false;
 char recvx[DEFAULT_BUFLEN] = "";
-boolean isRecieve = true;
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 INPUT Event = { 0 };
-
+HKL keyboard = LoadKeyboardLayoutA("00000409", KLF_ACTIVATE);
+int index = 0;
+HWND buttons[20];
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPTSTR, int nCmdShow)
 {
@@ -69,6 +71,7 @@ void startGetCoordinates(SOCKET sock)
 void addButtons(HWND hWnd)
 {
     devices.deleteDevices();
+    //SetTimer(hWnd, 2, 20, NULL);
     devices.startSearch(hWnd);
 }
 
@@ -96,6 +99,12 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
             }
             else if ((LOWORD(wParam) >= 0)&&(LOWORD(wParam) < 20))
             {
+                if (isRecieve)
+                {
+                    isRecieve = false;
+                    KillTimer(hWnd, 1);
+                    client.sendClose();
+                }
                 if (client.startClient(devices, LOWORD(wParam)))
                 {
                     isRecieve = true;
@@ -106,14 +115,6 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
                 }
 
             }
-            else if (LOWORD(wParam) == 6)
-            {
-                
-            }
-            else if (LOWORD(wParam) == 7)
-            {
-                
-            }
         }
         }
         break;
@@ -122,7 +123,47 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 
     case WM_TIMER:
         if (strlen(recvx) == 7) {
-            if (recvx[0] == 'M')
+            if (recvx[0] == 'K')
+            {
+                if (recvx[1] == 'D')
+                {
+                    Event.type = INPUT_KEYBOARD;
+                    Event.ki.dwFlags = KEYEVENTF_SCANCODE;
+                    if (recvx[3] == 's')
+                    {
+                        Event.ki.wScan = MapVirtualKey(0x1B, 0);
+                    }
+                    else if (recvx[2] == '_')
+                    {
+                        Event.ki.wScan = MapVirtualKey(LOBYTE(VkKeyScanEx(' ', keyboard)), 0);
+                    }
+                    else
+                    {
+                        Event.ki.wScan = MapVirtualKey(LOBYTE(VkKeyScanEx(recvx[2], keyboard)), 0);
+                    }
+                    SendInput(1, &Event, sizeof(Event));
+                }
+                else
+                {
+                    Event.type = INPUT_KEYBOARD;
+                    Event.ki.dwFlags = KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP;
+                    if (recvx[3] == 's')
+                    {
+                        Event.ki.wScan = MapVirtualKey(0x1B, 0);
+                    }
+                    else if (recvx[2] == '_')
+                    {
+                        Event.ki.wScan = MapVirtualKey(LOBYTE(VkKeyScanEx(' ', keyboard)), 0);
+                    }
+                    else
+                    {
+                        Event.ki.wScan = MapVirtualKey(LOBYTE(VkKeyScanEx(recvx[2], keyboard)), 0);
+                    }
+                    SendInput(1, &Event, sizeof(Event));
+                }
+                memset(recvx, 0, DEFAULT_BUFLEN);
+            }
+            else if (recvx[0] == 'M')
             {
                 POINT pt;
                 GetCursorPos(&pt);
@@ -154,8 +195,8 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
                 input.type = INPUT_MOUSE;
                 input.mi.mouseData = 0;
                 input.mi.time = 0;
-                input.mi.dx =xi*3;
-                input.mi.dy = yi*3;
+                input.mi.dx = xi * 3;
+                input.mi.dy = yi * 3;
                 input.mi.dwFlags = MOUSEEVENTF_MOVE | MOUSEEVENTF_VIRTUALDESK;
                 SendInput(1, &input, sizeof(input));
                 //return true;
@@ -167,11 +208,25 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
                 if (recvx[4] == 'D')
                 {
                     Sleep(200);
-                    POINT pt;
-                    GetCursorPos(&pt);
-                    ScreenToClient(hWnd, &pt);
-                    mouse_event(MOUSEEVENTF_LEFTDOWN, pt.x, pt.y, 0, 0);
-                    memset(recvx, 0, DEFAULT_BUFLEN);
+                    if (recvx[4] != '2')
+                    {
+                        POINT pt;
+                        GetCursorPos(&pt);
+                        ScreenToClient(hWnd, &pt);
+                        mouse_event(MOUSEEVENTF_LEFTDOWN, pt.x, pt.y, 0, 0);
+                        memset(recvx, 0, DEFAULT_BUFLEN);
+                    }
+                    else
+                    {
+                        POINT pt;
+                        GetCursorPos(&pt);
+                        ScreenToClient(hWnd, &pt);
+                        mouse_event(MOUSEEVENTF_LEFTDOWN, pt.x, pt.y, 0, 0);
+                        mouse_event(MOUSEEVENTF_LEFTUP, pt.x, pt.y, 0, 0);
+                        mouse_event(MOUSEEVENTF_LEFTDOWN, pt.x, pt.y, 0, 0);
+                        mouse_event(MOUSEEVENTF_LEFTUP, pt.x, pt.y, 0, 0);
+                        memset(recvx, 0, DEFAULT_BUFLEN);
+                    }
                 }
                 else if (recvx[4] == 'U')
                 {
@@ -181,7 +236,7 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
                     mouse_event(MOUSEEVENTF_LEFTUP, pt.x, pt.y, 0, 0);
                     memset(recvx, 0, DEFAULT_BUFLEN);
                 }
-                else
+                else if (recvx[4] == 'C')
                 {
                     POINT pt;
                     GetCursorPos(&pt);
@@ -239,117 +294,92 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
             {
                 if (recvx[1] == 'D')
                 {
-                    
+
+                    Event.type = INPUT_KEYBOARD;
+                    Event.ki.dwFlags = 0;
                     if (recvx[6] == 'r')
-                        keybd_event(VK_RETURN, 0, 0, 0);
+                        Event.ki.wVk = VK_RETURN;
                     else if (recvx[6] == 'e')
-                        keybd_event(VK_SPACE, 0, 0, 0);
+                        Event.ki.wVk = VK_SPACE;
+                    else if (recvx[5] == 'p')
+                        Event.ki.wVk = VK_SNAPSHOT;
                     else if (recvx[5] == 'k')
-                        keybd_event(VK_BACK, 0, 0, 0);
+                        Event.ki.wVk = VK_BACK;
                     else if (recvx[5] == 's')
-                        keybd_event(VK_CAPITAL, 0, 0, 0);
+                        Event.ki.wVk = VK_CAPITAL;
                     else if (recvx[4] == 'b')
-                        keybd_event(VK_TAB, 0, 0, 0);
+                        Event.ki.wVk = VK_TAB;
                     else if (recvx[4] == 'r')
-                        keybd_event(VK_LCONTROL, 0, 0, 0);
+                        Event.ki.wVk = VK_LCONTROL;
                     else if (recvx[4] == 'n')
-                        keybd_event(VK_LWIN, 0, 0, 0);
+                        Event.ki.wVk = VK_LWIN;
                     else if (recvx[4] == 't')
-                        keybd_event(VK_MENU, 0, 0, 0);
-                    else if (recvx[4] == 'l')
-                        keybd_event(VK_DELETE, 0, 0, 0);
+                        Event.ki.wVk = VK_LMENU;
+                    else if (recvx[4] == 'с')
+                        Event.ki.wVk = VK_ESCAPE;
                     else if (recvx[3] == 'h')
-                        keybd_event(VK_RSHIFT, 0, 0, 0);
-                    else 
+                        Event.ki.wVk = VK_RSHIFT;
+                    else if (recvx[3] != 'a' && (recvx[2] == 'f'))
                     {
-                        keybd_event(VkKeyScanEx(recvx[2], GetKeyboardLayout(0)), 0, KEYEVENTF_EXTENDEDKEY | 0, 0);
+                        if (recvx[4] == '2')
+                            Event.ki.wVk = VK_F12;
+                        else if (recvx[4] == '1')
+                            Event.ki.wVk = VK_F11;
+                        else
+                        {
+                            int shift = (int)recvx[3] - 49;
+                            Event.ki.wVk = VK_F1 + shift;
+                        }
                     }
+                    else
+                    {
+                        Event.ki.wVk = VkKeyScanEx(recvx[2], keyboard);
+                    }
+                    SendInput(1, &Event, sizeof(Event));
                 }
                 else
                 {
-                    if (recvx[3] == 'h')
-                        keybd_event(VK_RSHIFT, 0, KEYEVENTF_KEYUP, 0);
-                    else if (recvx[4] == 'b')
-                        keybd_event(VK_TAB, 0, KEYEVENTF_KEYUP, 0);
-                    else if (recvx[4] == 'r')
-                    {
-                        keybd_event(VK_LCONTROL, 0, KEYEVENTF_KEYUP, 0);
-                        keybd_event(VK_RCONTROL, 0, KEYEVENTF_KEYUP, 0);
-                        keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
-                    }
-                    else if (recvx[4] == 'n')
-                        keybd_event(VK_LWIN, 0, KEYEVENTF_KEYUP, 0);
-                    else if (recvx[4] == 't')
-                        keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0);
-                    else if (recvx[4] == 'l')
-                        keybd_event(VK_DELETE, 0, KEYEVENTF_KEYUP, 0);
-                    else if (recvx[5] == 'k')
-                        keybd_event(VK_BACK, 0, KEYEVENTF_KEYUP, 0);
-                    else if (recvx[5] == 's')
-                        keybd_event(VK_CAPITAL, 0, KEYEVENTF_KEYUP, 0);
-                    else if (recvx[6] == 'r')
-                        keybd_event(VK_RETURN, 0, KEYEVENTF_KEYUP, 0);
+                    Event.type = INPUT_KEYBOARD;
+                    Event.ki.dwFlags = KEYEVENTF_KEYUP;
+                    if (recvx[6] == 'r')
+                        Event.ki.wVk = VK_RETURN;
                     else if (recvx[6] == 'e')
-                        keybd_event(VK_SPACE, 0, KEYEVENTF_KEYUP, 0);
-                    else
+                        Event.ki.wVk = VK_SPACE;
+                    else if (recvx[5] == 'p')
+                        Event.ki.wVk = VK_SNAPSHOT;
+                    else if (recvx[5] == 'k')
+                        Event.ki.wVk = VK_BACK;
+                    else if (recvx[5] == 's')
+                        Event.ki.wVk = VK_CAPITAL;
+                    else if (recvx[4] == 'b')
+                        Event.ki.wVk = VK_TAB;
+                    else if (recvx[4] == 'r')
+                        Event.ki.wVk = VK_LCONTROL;
+                    else if (recvx[4] == 'n')
+                        Event.ki.wVk = VK_LWIN;
+                    else if (recvx[4] == 't')
+                        Event.ki.wVk = VK_LMENU;
+                    else if (recvx[4] == 'с')
+                        Event.ki.wVk = VK_ESCAPE;
+                    else if (recvx[3] == 'h')
+                        Event.ki.wVk = VK_RSHIFT;
+                    else if (recvx[3] != 'a' && (recvx[2] == 'f'))
                     {
-                        keybd_event(VkKeyScanEx(recvx[2], GetKeyboardLayout(0)), 0, KEYEVENTF_KEYUP, 0);
-                    }
-                }
-                memset(recvx, 0, DEFAULT_BUFLEN);
-            }
-            else if (recvx[0] == 'K')
-            {
-                if (recvx[1] == 'D')
-                {
-                       
-                    if (recvx[3] == 's')
-                    {
-                        Event.type = INPUT_KEYBOARD;
-                        Event.ki.dwFlags = KEYEVENTF_SCANCODE;
-                        Event.ki.wScan = MapVirtualKey(0x1B, 0);
-                        SendInput(1, &Event, sizeof(Event));
-                    }
-                    else if (recvx[2] == '_')
-                    {
-                        Event.type = INPUT_KEYBOARD;
-                        Event.ki.dwFlags = KEYEVENTF_SCANCODE;
-                        Event.ki.wScan = MapVirtualKey(LOBYTE(VkKeyScan(' ')), 0);
-                        SendInput(1, &Event, sizeof(Event));
-                    }
-                    else
-                    {
-                        Event.type = INPUT_KEYBOARD;
-                        Event.ki.dwFlags = KEYEVENTF_SCANCODE;
-                        char x = recvx[3];
-                        Event.ki.wScan = MapVirtualKey(LOBYTE(VkKeyScan(recvx[2])), 0);
-                        SendInput(1, &Event, sizeof(Event));
-                    }
-                }
-                else
-                {
-                    if (recvx[3] == 's')
-                    {
-                        Event.type = INPUT_KEYBOARD;
-                        Event.ki.dwFlags = KEYEVENTF_SCANCODE;
-                        Event.ki.wScan = MapVirtualKey(0x1B, 0);
-                        SendInput(1, &Event, sizeof(Event));
-                    }
-                    else if (recvx[2] == '_')
-                    {
-                        Event.type = INPUT_KEYBOARD;
-                        Event.ki.dwFlags = KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP;
-                        Event.ki.wScan = MapVirtualKey(LOBYTE(VkKeyScan(' ')), 0);
-                        SendInput(1, &Event, sizeof(Event));
+                        if (recvx[4] == '2')
+                            Event.ki.wVk = VK_F12;
+                        else if (recvx[4] == '1')
+                            Event.ki.wVk = VK_F11;
+                        else
+                        {
+                            int shift = (int)recvx[3] - 49;
+                            Event.ki.wVk = VK_F1;
+                        }
                     }
                     else
                     {
-                        Event.type = INPUT_KEYBOARD;
-                        Event.ki.dwFlags = KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP;
-                        Event.ki.wScan = MapVirtualKey(LOBYTE(VkKeyScan(recvx[2])), 0);
-                        SendInput(1, &Event, sizeof(Event));
+                        Event.ki.wVk = VkKeyScanEx(recvx[2], keyboard);
                     }
-                      
+                    SendInput(1, &Event, sizeof(Event));
                 }
                 memset(recvx, 0, DEFAULT_BUFLEN);
             }
@@ -362,7 +392,6 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
             }
 
         }
-        //else if (recvx[1]=='')
         break;
 
     case WM_DESTROY:

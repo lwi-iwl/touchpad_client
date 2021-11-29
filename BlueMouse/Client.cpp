@@ -24,17 +24,74 @@ boolean Client::startClient(Devices devices, int number)
     memset(&hint, 0, sizeof(hint));
     hint.addressFamily = AF_BTH;
     hint.port = 0;
-    hint.btAddr = BTH_ADDR(devices.getDeviceMac(number));
+    hint.btAddr = BTH_ADDR(devices.getBluetoothDeviceInfo(number).Address.ullLong);
     GUID nguiD = { 0x00001101, 0x0000, 0x1000,  {0x80, 0x00, 0x00, 0x80, 0x5F, 0x9B, 0x34, 0xFB } };
     hint.serviceClassId = nguiD;
+    
 
 
-    int connResult = connect(client, (sockaddr*)&hint, sizeof(hint));
-    if (connResult == SOCKET_ERROR)
+
+    u_long block = 1;
+    if (ioctlsocket(client, FIONBIO, &block) == SOCKET_ERROR)
+    {
+        closesocket(client);
+        return false;
+    }
+
+    if (connect(client, (sockaddr*)&hint, sizeof(hint)) == SOCKET_ERROR)
+    {
+        if (WSAGetLastError() != WSAEWOULDBLOCK)
+        {
+            closesocket(client);
+            return false;
+        }
+
+        fd_set setW, setE;
+
+        FD_ZERO(&setW);
+        FD_SET(client, &setW);
+        FD_ZERO(&setE);
+        FD_SET(client, &setE);
+        
+        timeval time_out = { 0 };
+        time_out.tv_sec = 5;
+        time_out.tv_usec = 0;
+
+        int ret = select(0, NULL, &setW, &setE, &time_out);
+        if (ret <= 0)
+        {
+            closesocket(client);
+            if (ret == 0)
+                WSASetLastError(WSAETIMEDOUT);
+            WSACleanup();
+            return false;
+        }
+
+        if (FD_ISSET(client, &setE))
+        {
+            closesocket(client);
+            WSACleanup();
+            return false;
+        }
+    }
+
+    block = 0;
+    ioctlsocket(client, FIONBIO, &block) == SOCKET_ERROR;
+
+
+
+
+
+
+
+    //int connResult = connect(client, (sockaddr*)&hint, sizeof(hint));
+
+  /*  if (connResult == SOCKET_ERROR)
     {
         closesocket(client);
         WSACleanup();
-    }
+        return false;
+    }*/
 
     const char* sendbuf = "..";
     int recvbuflen = DEFAULT_BUFLEN;
