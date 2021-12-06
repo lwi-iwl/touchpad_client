@@ -13,9 +13,9 @@ boolean Client::startClient(Devices devices, int number)
     int wsOk = WSAStartup(ver, &wsData);
 
     //CREATE A BLUETOOTH SOCKET
-    client = socket(AF_BTH, SOCK_STREAM, BTHPROTO_RFCOMM);
+    client[number] = socket(AF_BTH, SOCK_STREAM, BTHPROTO_RFCOMM);
 
-    if (client == INVALID_SOCKET)
+    if (client[number] == INVALID_SOCKET)
         WSACleanup();
 
     //AUTO ALLOCATION FOR SERVER CHANNEL 
@@ -27,40 +27,40 @@ boolean Client::startClient(Devices devices, int number)
     hint.btAddr = BTH_ADDR(devices.getBluetoothDeviceInfo(number).Address.ullLong);
     GUID nguiD = { 0x00001101, 0x0000, 0x1000,  {0x80, 0x00, 0x00, 0x80, 0x5F, 0x9B, 0x34, 0xFB } };
     hint.serviceClassId = nguiD;
-    
-
-
+   
 
     u_long block = 1;
-    if (ioctlsocket(client, FIONBIO, &block) == SOCKET_ERROR)
+    if (ioctlsocket(client[number], FIONBIO, &block) == SOCKET_ERROR)
     {
-        closesocket(client);
+        closesocket(client[number]);
         return false;
     }
+   
 
-    if (connect(client, (sockaddr*)&hint, sizeof(hint)) == SOCKET_ERROR)
+    if (connect(client[number], (sockaddr*)&hint, sizeof(hint)) == SOCKET_ERROR)
     {
+        BLUETOOTH_DEVICE_INFO device_info = devices.getBluetoothDeviceInfo(number);
         if (WSAGetLastError() != WSAEWOULDBLOCK)
         {
-            closesocket(client);
+            closesocket(client[number]);
             return false;
         }
 
         fd_set setW, setE;
 
         FD_ZERO(&setW);
-        FD_SET(client, &setW);
+        FD_SET(client[number], &setW);
         FD_ZERO(&setE);
-        FD_SET(client, &setE);
+        FD_SET(client[number], &setE);
         
         timeval time_out = { 0 };
-        time_out.tv_sec = 5;
+        time_out.tv_sec = 15;
         time_out.tv_usec = 0;
 
         int ret = select(0, NULL, &setW, &setE, &time_out);
         if (ret <= 0)
         {
-            closesocket(client);
+            closesocket(client[number]);
             if (ret == 0)
                 WSASetLastError(WSAETIMEDOUT);
             WSACleanup();
@@ -69,59 +69,46 @@ boolean Client::startClient(Devices devices, int number)
 
         if (FD_ISSET(client, &setE))
         {
-            closesocket(client);
+            closesocket(client[number]);
             WSACleanup();
             return false;
         }
     }
-
     block = 0;
-    ioctlsocket(client, FIONBIO, &block) == SOCKET_ERROR;
+    ioctlsocket(client[number], FIONBIO, &block);
 
-
-
-
-
-
-
-    //int connResult = connect(client, (sockaddr*)&hint, sizeof(hint));
-
-  /*  if (connResult == SOCKET_ERROR)
-    {
-        closesocket(client);
-        WSACleanup();
-        return false;
-    }*/
 
     const char* sendbuf = "..";
     int recvbuflen = DEFAULT_BUFLEN;
     char recvbuf[DEFAULT_BUFLEN] = "";
 
-    int res = send(client, sendbuf, (int)strlen(sendbuf), MSG_OOB);
+    int res = send(client[number], sendbuf, (int)strlen(sendbuf), MSG_OOB);
 
     if (res == SOCKET_ERROR)
     {
-        closesocket(client);
+        closesocket(client[number]);
         WSACleanup();
         return false;
     }
-    res = recv(client, recvbuf, recvbuflen, 0);
+    res = recv(client[number], recvbuf, recvbuflen, 0);
+    char x = recvbuf[0];
+    char h = x;
     return true;
 }
 
 
-void Client::sendClose()
+void Client::sendClose(int number)
 {
-    send(client, "DISCO", 5, 0);
-    closesocket(client);
+    send(client[number], "DISCO", 5, 0);
+    closesocket(client[number]);
 }
 
-void Client::close()
+void Client::close(int number)
 {
-    closesocket(client);
+    closesocket(client[number]);
 }
 
-SOCKET Client::getSock()
+SOCKET Client::getSock(int number)
 {
-    return client;
+    return client[number];
 }

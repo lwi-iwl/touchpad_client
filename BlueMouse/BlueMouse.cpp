@@ -15,17 +15,22 @@
 #pragma comment (lib, "ws2_32.lib")
 #pragma comment(lib, "bthprops.lib")
 #define DEFAULT_BUFLEN 7
+#define COLUMN 20
 
+LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 Devices devices;
 Client client;
 SOCKET sock;
-boolean isRecieve = false;
 char recvx[DEFAULT_BUFLEN] = "";
-LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 INPUT Event = { 0 };
 HKL keyboard = LoadKeyboardLayoutA("00000409", KLF_ACTIVATE);
-int index = 0;
-HWND buttons[20];
+HWND button;
+HWND buttons[80];
+bool isRecieveArr[80] = { false };
+int current = 81;
+int maxindex = 0;
+HBRUSH color = CreateSolidBrush(RGB(0, 0, 0));
+int x = 10;
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPTSTR, int nCmdShow)
 {
@@ -37,9 +42,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPTSTR, int nCmdShow)
     RegisterClass(&windowClass);
     HWND hwnd = CreateWindow(
         windowClass.lpszClassName,
-        L"CatXP",
+        L"BlueMouse",
         WS_OVERLAPPEDWINDOW & ~WS_THICKFRAME & ~WS_MAXIMIZEBOX,
-        100, 50, 720, 1060,
+        100, 50, 1280, 720,
         nullptr, nullptr,
         hInstance,
         nullptr);
@@ -58,21 +63,34 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPTSTR, int nCmdShow)
     return 0;
 }
 
-void startGetCoordinates(SOCKET sock) 
+void startGetCoordinates(WORD param, HWND hWnd) 
 {
-    while (isRecieve)
+    InvalidateRect(hWnd, NULL, TRUE);
+    isRecieveArr[param] = true;
+    if (client.startClient(devices, param))
     {
-        int res = 0;
-        int recvbuflen = DEFAULT_BUFLEN;
-        res = recv(sock, recvx, recvbuflen, 0);
+        if (isRecieveArr[param])
+        {
+            sock = client.getSock(param);
+            SetTimer(hWnd, 1, 20, NULL);
+            while (isRecieveArr[param])
+            {
+                int res = 0;
+                int recvbuflen = DEFAULT_BUFLEN;
+                res = recv(sock, recvx, recvbuflen, 0);
+            }
+            KillTimer(hWnd, 1);
+        }
+        client.sendClose(param);
     }
+    InvalidateRect(hWnd, NULL, TRUE);
+    isRecieveArr[param] = false;
 }
 
-void addButtons(HWND hWnd)
+void addButtons()
 {
-    devices.deleteDevices();
     //SetTimer(hWnd, 2, 20, NULL);
-    devices.startSearch(hWnd);
+    devices.startSearch();
 }
 
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -82,40 +100,47 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
 
     case WM_CREATE:
     {
-        HWND Button = CreateWindow(L"BUTTON", L"SearchBluetooth", WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, 10, 10, 200, 30, hWnd, (HMENU)21, (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE), NULL);
-        HWND hScroll = CreateWindow(L"scrollbar", NULL, WS_CHILD | WS_VISIBLE | SBS_VERT, 685, 0, 20, 320, hWnd, (HMENU)22, (HINSTANCE)GetWindowLongA(hWnd, -6), NULL);
+        std::fill_n(isRecieveArr, 80, false);
+        button = CreateWindow(L"BUTTON", L"SearchBluetooth", WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, 10, 10, 200, 30, hWnd, (HMENU)81, (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE), NULL);
     }
     break;
 
     case WM_COMMAND:
     {
+        current = LOWORD(wParam);
         switch (HIWORD(wParam))
         {
         case BN_CLICKED:
         {
-            if (LOWORD(wParam) == 21)
+            if (LOWORD(wParam) == 81)
             {
-                addButtons(hWnd);
+                /*for (int i = 0; i < 20; i++)
+                {
+                    if (isRecieveArr[i])
+                        client.sendClose(i);
+                }
+                std::fill_n(isRecieveArr, 20, false);
+                addButtons(hWnd);*/
+                x = 10;
+                current = 82;
+                SetTimer(hWnd, 2, 20, NULL);
             }
-            else if ((LOWORD(wParam) >= 0)&&(LOWORD(wParam) < 20))
+            else if ((LOWORD(wParam) >= 0)&&(LOWORD(wParam) < 80))
             {
-                if (isRecieve)
+                if (!isRecieveArr[LOWORD(wParam)])
                 {
-                    isRecieve = false;
-                    KillTimer(hWnd, 1);
-                    client.sendClose();
-                }
-                if (client.startClient(devices, LOWORD(wParam)))
-                {
-                    isRecieve = true;
-                    sock = client.getSock();
-                    std::thread thr(startGetCoordinates, sock);
+                    for (int i = 0; i < maxindex; i++)
+                    {
+                        if (isRecieveArr[i])
+                            client.sendClose(i);
+                    }
+                    std::fill_n(isRecieveArr, maxindex, false);
+                    std::thread thr(startGetCoordinates, LOWORD(wParam), hWnd);
                     thr.detach();
-                    SetTimer(hWnd, 1, 20, NULL);
                 }
-
             }
         }
+        SetFocus(hWnd);
         }
         break;
     }
@@ -248,7 +273,7 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
             }
             else if (recvx[0] == 'R')
             {
-                if (recvx[4] == 'D')
+                /*if (recvx[4] == 'D')
                 {
                     POINT pt;
                     GetCursorPos(&pt);
@@ -264,7 +289,7 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
                     mouse_event(MOUSEEVENTF_RIGHTUP, pt.x, pt.y, 0, 0);
                     memset(recvx, 0, DEFAULT_BUFLEN);
                 }
-                else
+                else*/
                 {
                     POINT pt;
                     GetCursorPos(&pt);
@@ -385,21 +410,149 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
             }
             else if (recvx[0] == 'D')
             {
-                isRecieve = false;
+            for (int i = 0; i < maxindex; i++)
+                if (isRecieveArr[i])
+                    client.close(i);
+                std::fill_n(isRecieveArr, maxindex, false);
                 KillTimer(hWnd, 1);
-                client.close();
                 memset(recvx, 0, DEFAULT_BUFLEN);
             }
+        }
+        else if (wParam == 2)
+        {
+            if (current == 82)
+            {
+                current = 81;
+                InvalidateRect(hWnd, NULL, TRUE);
+                for (int i = 0; i < maxindex; i++)
+                {
+                    if (isRecieveArr[i])
+                        client.sendClose(i);
+                }
+                for (int i = 0; i < maxindex; i++)
+                {
+                    DestroyWindow(buttons[i]);
+                    buttons[i] = NULL;
+                }
+                maxindex = 0;
+                devices.deleteDevices();
+                std::fill_n(isRecieveArr, maxindex, false);
+                std::thread thr(addButtons);
+                thr.detach();
+            }
+            else if (devices.maxIndex()==0 || maxindex<=devices.maxIndex())
+            {
+                if (devices.isExist(maxindex))//while(?) для "сразу"
+                {
+                    int y = maxindex % COLUMN;
+                    buttons[maxindex] = CreateWindow(L"BUTTON", devices.getBluetoothDeviceInfo(maxindex).szName, WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, x, 30 + ((y + 1) * 30), 200, 30, hWnd, (HMENU)maxindex, (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE), NULL);
+                    maxindex++;
+                    if ((maxindex % COLUMN) == 0)
+                        x = x + 280;
+                }
+            }
+            else
+            {
+                KillTimer(hWnd, 2);
+            }
+        }
+        break;
 
+        case WM_KEYDOWN:
+            if (wParam == VK_RETURN)
+            {
+                if (current == 81)
+                    SetFocus(button);
+                SendMessage(hWnd, WM_COMMAND, current, 0);
+            }
+            else if (wParam == VK_RIGHT)
+            {
+                if (current != 81)
+                {
+                    if (current + COLUMN < maxindex)
+                        current += COLUMN;
+                    else
+                        current = maxindex - 1;
+                    InvalidateRect(hWnd, NULL, TRUE);
+                }
+            }
+            else if (wParam == VK_LEFT)
+            {
+                if (current != 81 && current >= COLUMN)
+                {
+                    current -= COLUMN;
+                    InvalidateRect(hWnd, NULL, TRUE);
+                }
+            }
+            else if (wParam == VK_DOWN)
+            {
+                if (current == 81 && buttons[0] != NULL)
+                {
+                    current = 0;
+                }
+                else
+                {
+                    if (buttons[current + 1] != NULL)
+                        current++;
+                }
+                InvalidateRect(hWnd, NULL, TRUE);
+            }
+            else if (wParam == VK_UP)
+            {
+                if (current!=81)
+                    if (current == 0)
+                    {
+                        current = 81;
+                    }
+                    else
+                    {
+                        current--;
+                    }
+                InvalidateRect(hWnd, NULL, TRUE);
+            }
+            break;
+
+        case WM_PAINT:
+        {
+
+            if (isRecieveArr[current] == true)
+            {
+                DeleteObject(color);
+                color = CreateSolidBrush(RGB(255, 0, 0));
+            }
+            else
+            {
+                DeleteObject(color);
+                color = CreateSolidBrush(RGB(0, 0, 0));
+            }
+            PAINTSTRUCT ps;
+            RECT rc;
+            if (current == 81)
+                SetRect(&rc, 250, 20, 260, 30);
+            else
+            {
+                RECT winr;
+                RECT r;
+                GetWindowRect(hWnd, &winr);
+                GetWindowRect(buttons[current], &r);
+                SetRect(&rc, r.right-winr.left+30, r.top-winr.top-20, r.right-winr.left+40, r.top-winr.top-10);
+            }
+            HDC hdc = BeginPaint(hWnd, &ps);
+            FillRect(hdc, &rc, color);
+            EndPaint(hWnd, &ps);
         }
         break;
 
     case WM_DESTROY:
     {
-        client.sendClose();
+        //UnloadKeyboardLayout(keyboard);
+        for (int i = 0; i<maxindex; i++)
+            if (isRecieveArr[i])
+                client.sendClose(i);
         PostQuitMessage(0);
     }
     break;
+
     default: {
         return DefWindowProc(hWnd, message, wParam, lParam);
     }

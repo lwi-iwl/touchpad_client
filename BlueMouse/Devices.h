@@ -2,16 +2,18 @@
 #define DEVICES_H
 #include <windows.h>
 #include <bluetoothapis.h>
+#include <iostream>
 class Devices
 {
     private:
-        HWND buttons[20];
-        BLUETOOTH_DEVICE_INFO m_device_info_arr[20];
-        boolean isall = false;
+        BLUETOOTH_DEVICE_INFO m_device_info_arr[80];
+        boolean isexist[80];
+        int maxindex = 0;
     public:
         BLUETOOTH_DEVICE_INFO getBluetoothDeviceInfo(int number);
-        boolean isAll();
-        void startSearch(HWND hWnd);
+        int maxIndex();
+        boolean isExist(int number);
+        void startSearch();
         void deleteDevices();
 };
 #endif
