@@ -10,6 +10,8 @@
 #include <bluetoothapis.h>
 #include<ws2bth.h>
 #include <thread>
+#include <sstream>
+#include <iomanip>
 #include "Devices.h"
 #include "Client.h"
 #pragma comment (lib, "ws2_32.lib")
@@ -22,7 +24,6 @@ Devices devices;
 Client client;
 SOCKET sock;
 char recvx[DEFAULT_BUFLEN] = "";
-INPUT Event = { 0 };
 HKL keyboard = LoadKeyboardLayoutA("00000409", KLF_ACTIVATE);
 HWND button;
 HWND buttons[80];
@@ -150,41 +151,61 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
         if (strlen(recvx) == 7) {
             if (recvx[0] == 'K')
             {
+                INPUT Event = { 0 };
                 if (recvx[1] == 'D')
                 {
-                    Event.type = INPUT_KEYBOARD;
-                    Event.ki.dwFlags = KEYEVENTF_SCANCODE;
-                    if (recvx[3] == 's')
+                    if (recvx[3] == 'm')
                     {
-                        Event.ki.wScan = MapVirtualKey(0x1B, 0);
+                        POINT pt;
+                        GetCursorPos(&pt);
+                        ScreenToClient(hWnd, &pt);
+                        mouse_event(MOUSEEVENTF_RIGHTDOWN, pt.x, pt.y, 0, 0);
                     }
-                    else if (recvx[2] == '_')
-                    {
-                        Event.ki.wScan = MapVirtualKey(LOBYTE(VkKeyScanEx(' ', keyboard)), 0);
+                    else {
+                        Event.type = INPUT_KEYBOARD;
+                        Event.ki.dwFlags = KEYEVENTF_SCANCODE;
+                        if (recvx[3] == 's')
+                        {
+                            Event.ki.wScan = MapVirtualKey(0x1B, 0);
+                        }
+                        else if (recvx[2] == '_')
+                        {
+                            Event.ki.wScan = MapVirtualKey(LOBYTE(VkKeyScanEx(' ', keyboard)), 0);
+                        }
+                        else
+                        {
+                            Event.ki.wScan = MapVirtualKey(LOBYTE(VkKeyScanEx(recvx[2], keyboard)), 0);
+                        }
+                        SendInput(1, &Event, sizeof(Event));
                     }
-                    else
-                    {
-                        Event.ki.wScan = MapVirtualKey(LOBYTE(VkKeyScanEx(recvx[2], keyboard)), 0);
-                    }
-                    SendInput(1, &Event, sizeof(Event));
                 }
                 else
                 {
-                    Event.type = INPUT_KEYBOARD;
-                    Event.ki.dwFlags = KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP;
-                    if (recvx[3] == 's')
+                    if (recvx[3] == 'm')
                     {
-                        Event.ki.wScan = MapVirtualKey(0x1B, 0);
-                    }
-                    else if (recvx[2] == '_')
-                    {
-                        Event.ki.wScan = MapVirtualKey(LOBYTE(VkKeyScanEx(' ', keyboard)), 0);
+                        POINT pt;
+                        GetCursorPos(&pt);
+                        ScreenToClient(hWnd, &pt);
+                        mouse_event(MOUSEEVENTF_RIGHTUP, pt.x, pt.y, 0, 0);
                     }
                     else
                     {
-                        Event.ki.wScan = MapVirtualKey(LOBYTE(VkKeyScanEx(recvx[2], keyboard)), 0);
+                        Event.type = INPUT_KEYBOARD;
+                        Event.ki.dwFlags = KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP;
+                        if (recvx[3] == 's')
+                        {
+                            Event.ki.wScan = MapVirtualKey(0x1B, 0);
+                        }
+                        else if (recvx[2] == '_')
+                        {
+                            Event.ki.wScan = MapVirtualKey(LOBYTE(VkKeyScanEx(' ', keyboard)), 0);
+                        }
+                        else
+                        {
+                            Event.ki.wScan = MapVirtualKey(LOBYTE(VkKeyScanEx(recvx[2], keyboard)), 0);
+                        }
+                        SendInput(1, &Event, sizeof(Event));
                     }
-                    SendInput(1, &Event, sizeof(Event));
                 }
                 memset(recvx, 0, DEFAULT_BUFLEN);
             }
@@ -317,6 +338,7 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
             }
             else if (recvx[0] == 'C')
             {
+            INPUT Event = { 0 };
                 if (recvx[1] == 'D')
                 {
 
@@ -445,7 +467,28 @@ LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPara
                 if (devices.isExist(maxindex))//while(?) для "сразу"
                 {
                     int y = maxindex % COLUMN;
-                    buttons[maxindex] = CreateWindow(L"BUTTON", devices.getBluetoothDeviceInfo(maxindex).szName, WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, x, 30 + ((y + 1) * 30), 200, 30, hWnd, (HMENU)maxindex, (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE), NULL);
+                    LPCWSTR lp = devices.getBluetoothDeviceInfo(maxindex).szName;
+                    LPCWSTR p = lp;
+                    if (devices.getBluetoothDeviceInfo(maxindex).szName[0] != L'\0')
+                        buttons[maxindex] = CreateWindow(L"BUTTON", devices.getBluetoothDeviceInfo(maxindex).szName, WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, x, 30 + ((y + 1) * 30), 200, 30, hWnd, (HMENU)maxindex, (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE), NULL);
+                    else
+                    {
+                       
+                        std::string nameMac = "";
+                        for (int i = 0; i < 6; i++)
+                        {
+                            std::stringstream ss;
+                            ss << std::hex;
+                            ss << std::setw(2) << std::setfill('0') << (int)devices.getBluetoothDeviceInfo(maxindex).Address.rgBytes[i];
+                            nameMac = nameMac + ss.str();
+                            if (i != 5)
+                                nameMac = nameMac + ":";
+                        }
+                       
+                        std::wstring wsTmp(nameMac.begin(), nameMac.end());
+                        buttons[maxindex] = CreateWindow(L"BUTTON", (LPCWSTR)wsTmp.c_str(), WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, x, 30 + ((y + 1) * 30), 200, 30, hWnd, (HMENU)maxindex, (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE), NULL);
+                        //buttons[maxindex] = CreateWindow(L"BUTTON", L"(Noname)", WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON, x, 30 + ((y + 1) * 30), 200, 30, hWnd, (HMENU)maxindex, (HINSTANCE)GetWindowLongPtr(hWnd, GWLP_HINSTANCE), NULL);
+                    }
                     maxindex++;
                     if ((maxindex % COLUMN) == 0)
                         x = x + 280;

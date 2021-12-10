@@ -28,55 +28,12 @@ boolean Client::startClient(Devices devices, int number)
     GUID nguiD = { 0x00001101, 0x0000, 0x1000,  {0x80, 0x00, 0x00, 0x80, 0x5F, 0x9B, 0x34, 0xFB } };
     hint.serviceClassId = nguiD;
    
-
-    u_long block = 1;
-    if (ioctlsocket(client[number], FIONBIO, &block) == SOCKET_ERROR)
+    if (connect(client[number], (sockaddr*)&hint, sizeof(hint)))
     {
         closesocket(client[number]);
+        WSACleanup();
         return false;
-    }
-   
-
-    if (connect(client[number], (sockaddr*)&hint, sizeof(hint)) == SOCKET_ERROR)
-    {
-        BLUETOOTH_DEVICE_INFO device_info = devices.getBluetoothDeviceInfo(number);
-        if (WSAGetLastError() != WSAEWOULDBLOCK)
-        {
-            closesocket(client[number]);
-            return false;
-        }
-
-        fd_set setW, setE;
-
-        FD_ZERO(&setW);
-        FD_SET(client[number], &setW);
-        FD_ZERO(&setE);
-        FD_SET(client[number], &setE);
-        
-        timeval time_out = { 0 };
-        time_out.tv_sec = 15;
-        time_out.tv_usec = 0;
-
-        int ret = select(0, NULL, &setW, &setE, &time_out);
-        if (ret <= 0)
-        {
-            closesocket(client[number]);
-            if (ret == 0)
-                WSASetLastError(WSAETIMEDOUT);
-            WSACleanup();
-            return false;
-        }
-
-        if (FD_ISSET(client, &setE))
-        {
-            closesocket(client[number]);
-            WSACleanup();
-            return false;
-        }
-    }
-    block = 0;
-    ioctlsocket(client[number], FIONBIO, &block);
-
+    };
 
     const char* sendbuf = "..";
     int recvbuflen = DEFAULT_BUFLEN;
